@@ -6,7 +6,6 @@ library(rnaturalearthdata)
 library(rgeos)
 library(ggspatial)
 
-#I cant believe they let pike mentor someone at WSN
 
 #Load in the "World" as a data frame
 world <- ne_countries(scale = "medium", returnclass = "sf")
