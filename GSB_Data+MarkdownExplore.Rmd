@@ -1,0 +1,688 @@
+---
+title: "Giant Seabass Movement at Santa Barbara Island"
+author: "Ryan Freedman"
+date: "11/29/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Add in packages and clean data in this chunk. Data is outputs from VEMCO's VUE software plus some spreadsheets maintatined by CINMS GIS Czar. This includes detections from VUE, spreadsheet of reciever sites around SBI and a list of fish tagged for this project.
+```{r}
+#Add Packages
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(sp)
+library(ggpubr)
+library(readxl)
+library(lubridate)
+library(raster)
+library(rworldmap)
+library(ggplot2)
+library(scales) 
+library(here)
+library(ggrepel)
+library(tidyselect)
+library(dplyr)
+library(ADePTR)
+library(raster)
+library(gganimate)
+library(VTrack)
+library(forecast)
+library(ggthemes)
+library(ATT)
+library(VTrack)
+library(mapview)
+library(rgdal)
+library(raster)
+library(viridis) ## ac
+library(reshape) # this is for colsplit
+library(fields) # this is for colorramps
+library(AssFunc) # for the abacus plots
+library(leaflet)
+library(dplyr)
+library(ggsn)
+library(ggmap)
+library(gdistance)
+library(asnipe) #for GMM events
+library(sna) #for calculating weighted degrees
+library(igraph) #provides a set of data types and functions for implementation of graph algorithms and
+#fast handling of large graphs, with millions of vertices and edges
+library(extrafont)
+```
+
+# Add Needed Data
+
+```{r}
+
+#Cleaned Up Detection File (Station Names made to match)
+detect <- read_csv("GSB_detections_25Oct2019_Clean.csv")
+detect <- detect %>% dplyr::select(`Date and Time (UTC)`,Transmitter, Receiver,           `Station Name`)  #drop not needed cols
+head(detect)  
+
+#VR2W Site Information
+sites <- read_csv("GSBsites.csv") #bring in VR2W data
+sites<-sites %>% dplyr::select (c("Site","Lat_dd","Lon_dd")) #drop not needed cols
+names(sites)[names(sites) == "Site"] <- "Station Name" #rename column for merge
+head(sites)
+
+#GSB Data
+Tagged_GSB<- read_excel("Tagged GSB (In-House).xlsx") #bring in tag data from notebooks
+Tagged_GSB$ID<- paste("A69-1602-", Tagged_GSB$ID, sep="") #ad in tag leader info
+my.tags<-Tagged_GSB$ID #make a list of my tag IDs
+
+```
+
+Adding in Spatial Data here. Files include a shapefile of Santa Barbara Island and a delinating project area shapefile. Both are required by the ADePTR package which will come later. Both are exports from ArcGIS Pro.
+
+```{r}
+SBI <- st_read(dsn = "SBI_Shapefiles", layer = "SBI")
+
+SBI2<-st_cast(SBI,"POLYGON")
+SBI3<-SBI2
+SBI4<-SBI3$geometry[-66]
+SBI5<-st_cast(SBI4,"POLYGON")
+
+ProjectArea<-st_read(dsn = "SBI_Shapefiles", layer = "SBI_square")
+```
+
+Add in Tagging Data from the Notebook
+
+```{r}
+# Merge dataset and just get my tags
+
+SBI.dat<-merge(detect, sites, by="Station Name") #Merge detection data with site data
+SBI.GSB <-SBI.dat[SBI.dat$Transmitter %in% my.tags, ] # Subset with NOAA Tagged Fish
+SBI.GSB$`Date and Time (UTC)`<-as.POSIXct(SBI.GSB$`Date and Time (UTC)`, tz = "UTC",
+                                          format="%m/%d/%y %H:%M")
+
+```
+
+
+Breakdown of Detections by Fish
+```{r}
+#Get Number of Detections by Transimitter
+
+trans_counts <-SBI.GSB %>%
+  dplyr::select (-c(`Date and Time (UTC)`)) %>%
+  group_by(Transmitter) %>%
+  count(Transmitter) %>%
+  ungroup()
+
+trans_counts
+```
+
+
+Time Abacus by Location
+```{r}
+
+all <-ggplot(SBI.GSB)+ geom_point(aes(x=`Date and Time (UTC)`, y= `Station Name`, color= Transmitter), shape=15, size=3) + scale_color_manual(values=c("#000033","#003A2F","#01635B","#35918C","#7DC7BD","#D8BB77","#B97D2D","#874E08","#502F06", "#00CC99", "#003000", "#99CCCC"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_x_datetime() +
+  ggtitle("All Fish") +
+  xlab("Month") +
+  ylab("Station") +
+  theme(axis.text=element_text(size=15),
+        axis.title=element_text(size=15, face= "bold"))
+
+all
+
+
+```
+
+Time Abacus by Fish
+```{r}
+
+ball <-ggplot(SBI.GSB)+ geom_point(aes(x=`Date and Time (UTC)`, y= `Transmitter`, color= Transmitter), shape=15, size=3) + scale_colour_brewer(palette="Spectral")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_x_datetime() +
+  ggtitle("All Fish") +
+  xlab("Month") +
+  ylab("Station") +
+  theme(axis.text=element_text(size=15),
+        axis.title=element_text(size=15, face= "bold"))
+
+ball
+
+```
+
+
+Data Processing Work With ADePTR
+```{r}
+#### Data Drop in
+
+rec.log<-read.csv("GSBRecLogtillWinter19.csv")
+
+#make Station File
+stations<-SBI.dat %>%
+  dplyr::select(sta_id = "Station Name", rec_id = "Receiver",x="Lat_dd", y= "Lon_dd")  %>%
+  unique()
+xx<-merge(rec.log, stations, by= 'sta_id')
+AD.stations<-data.frame(xx$sta_id, xx$rec_id.y, xx$dt_dep, xx$dt_ret, xx$x, xx$y)
+names(AD.stations)<-c("sta_id", "rec_id", "dt_dep", "dt_ret", "y", "x")
+AD.stations$dt_dep<-as.POSIXct(AD.stations$dt_dep, tz="America/Los_Angeles", format= "%m/%d/%y %H:%M")
+AD.stations$dt_ret<-as.POSIXct(AD.stations$dt_ret, tz="America/Los_Angeles", format= "%m/%d/%y %H:%M")
+
+#Make Detection File
+AD.detections<-SBI.dat %>%
+  dplyr::select(id = "Transmitter", dt = "Date and Time (UTC)", rec_id="Receiver")
+
+AD.detections$dt<-as.POSIXct(AD.detections$dt, tz="America/Los_Angeles", format="%m/%d/%y %H:%M")
+
+#Process detections and stations
+proc.det <- proc_dets(det = AD.detections, sta = AD.stations, crs = 4326)
+
+```
+
+Working through Analysis with ADEPTR
+
+Speed Filter
+```{r}
+filt.det <- proc.det %>% 
+  spd_filter(min_dist = units::set_units(1, "mi"))  %>%  #Speed filter 
+  singleton_filter(time_horizon = "1 week") #singleton filter
+```
+
+
+```{r}
+plot_sta_history(proc_det = filt.det) #dections by station
+
+p <- map_dets(proc_det = filt.det, use_ggplot = TRUE)$ggplot
+p+geom_sf(data = SBI5, fill="darkgreen")
+
+
+```
+
+Periodicity 
+```{r}
+tsData <- filt.det$dt # ts data
+
+tms <- as.POSIXct(tsData, format="%H:%M:%S")
+hours <- substr(tms, 12, 16)
+hours<-as.POSIXct(hours, format="%H:%M")
+hist( hours , breaks = unique( hours ) )
+
+# Rerun for Mound Offshore
+ts.MO<-filt.det %>% 
+  subset(sta_id =="Mound Offshore")
+hours.MO <- substr(ts.MO$dt, 12, 16)
+hours.MO<-as.POSIXct(hours.MO, format="%H:%M")
+hist( hours.MO , breaks = unique( hours.MO ) )
+
+```
+
+Daily Averages for Mound Offshore Site for comparison with ST
+```{r}
+day.filt.det<-filt.det
+day.filt.det$Date <- substr(day.filt.det$dt, 1, 10)
+
+day.filt.det2<- day.filt.det %>% group_by(Date) %>% summarise(frequency = n())
+day.filt.det2<-st_drop_geometry(day.filt.det2)
+day.filt.det2$Year<-substr(day.filt.det2$Date, 1, 4)
+day.filt.det2$Date2<-as.POSIXct(day.filt.det2$Date, format="%Y-%m-%d")
+
+ggplot(day.filt.det2, aes(x = Date2, y= frequency,fill=Year)) + geom_bar(stat="identity") + ylab("Date") + xlab("Detections") + theme_tufte()
+
+ggplot(day.filt.det2, aes(x = Date2, y= frequency,fill=Year)) + geom_bar(stat="identity") +
+  scale_x_datetime(limits = as.POSIXct(c("2018-08-13", "2018-12-31"))) +ylab("Date") +   xlab("Detections")+ theme_tufte()
+  
+ 
+
+
+#SoundTrap Site
+ts.MO$Date <- substr(ts.MO$dt, 1, 10)
+ST.data<- ts.MO %>% group_by(Date) %>% summarise(frequency = n())
+ST.data<-st_drop_geometry(ST.data)
+
+ST.data$Year<-substr(ST.data$Date, 1, 4)
+ST.data$MonDay<-substr(ST.data$Date, 6, 10)
+ST.data$Date2<-as.POSIXct(ST.data$Date, format="%Y-%m-%d")
+
+#Plot.
+ggplot(ST.data, aes(x = Date2, y=frequency, fill = Year)) + geom_bar(stat="identity") +ylab("Date") +   xlab("Detections") + theme_tufte()
+  
+
+```
+
+
+Time Series
+```{r}
+decomposedRes <- decompose(tsData) # use type = "additive" for additive components
+plot (decomposedRes) # see plot below
+stlRes <- stl(tsData, s.window = "periodic")
+
+```
+
+
+#VTRACK Packages
+
+VTRACK Package Starts Here. Lets begin by reorging data to the right format. Vtrack is very sensitive to data formatting and requires data in a specific format. VTrack will throw errors without data in the correct format
+
+##Data QA/QC
+```{r}
+#Distances File
+
+SBI.distance<-sites %>% transmute(
+  LOCATION = `Station Name`,
+  LATITUDE = Lat_dd,
+  LONGITUDE = Lon_dd,
+  RADIUS = 200)
+
+SBI.distance$LOCATION<-as.factor(SBI.distance$LOCATION)
+SBI.distance$RADIUS<-as.integer(SBI.distance$RADIUS)
+SBI.distance<-as.data.frame(SBI.distance)
+
+DirectDM <- GenerateDirectDistance(SBI.distance)
+
+#Tagging Info
+
+sbi.taginfo<-Tagged_GSB %>% transmute(
+  transmitter_id = ID,
+  tag_id = substring(Tagged_GSB$ID, 10),
+  release_id = "",
+  tag_project_name = "GSB Soundscapes",
+  scientific_name = "Stereolipas gigas",
+  common_name = "Giant Seabass",
+  embargo_date = NA,
+  is_protected = "Yes",
+  release_latitude = LATITUDE,
+  release_longitude = LONGITUDE,
+  ReleaseDate = DATE,
+  sensor_slope = NA,
+  sensor_intercept = NA,
+  sensor_type = "PINGER",
+  sensor_unit = NA,
+  tag_model_name = "",
+  tag_serial_number = "",
+  tag_expected_life_time_days =653,
+  tag_status = "",
+  sex = "",
+  measurement = "",
+  dual_sensor_tag = 'FALSE'
+)
+
+sbi.taginfo <- filter(sbi.taginfo, tag_id != "16716")
+
+#station info
+
+SBI.statinfo<-AD.stations %>% transmute(
+  project_name = "GSB Soundscapes",
+  installation_name = "Santa Barbara Island",
+  station_name = sta_id,
+  receiver_name = rec_id,
+  deploymentdatetime_timestamp = dt_dep,
+  recoverydatetime_timestamp = dt_ret,
+  status = "RECOVERED",
+  station_longitude = x,
+  station_latitude = y,
+  imos_device = "FALSE",
+  region = "California Counter Current")
+
+
+# Detection Data
+
+v.data<-SBI.GSB %>% transmute(
+  Date.and.Time..UTC. = `Date and Time (UTC)`,
+  Receiver = Receiver,
+  Transmitter.Name = substring(Transmitter, 10), 
+  Transmitter = Transmitter,
+  Transmitter.Serial = "",
+  Sensor.Value = NA,
+  Sensor.Unit = NA,
+  Station.Name = `Station Name`,
+  Latitude = Lat_dd,
+  Longitude = Lon_dd,
+  Ascention = "",
+  Year = "",
+  region = "California Counter Current",
+  posix = as.POSIXct(`Date and Time (UTC)`),
+  local = as.POSIXct(`Date and Time (UTC)`),
+  station.short = `Station Name`,
+  Date = as.factor(substring(`Date and Time (UTC)`, 1,10))
+)
+
+attributes(v.data$local)$tzone <- "America/Los_Angeles"
+
+## this is necessary for setting up the data and calculating the centers of activity ###
+
+v.data$Latitude<-as.numeric(v.data$Latitude)
+v.data$Longitude<-as.numeric(v.data$Longitude)
+v.data$Transmitter<-as.factor(v.data$Transmitter)
+v.data$Station.Name<-as.factor(v.data$Station.Name)
+v.data$Receiver<-as.factor(v.data$Receiver)
+
+#Drop Fish 161716 Not Enough Detections
+v.data <- filter(v.data, Transmitter.Name != "16716")
+```
+
+This is the Animal Tracking Tool Box Function and the way to store data in a single object
+```{r}
+
+## Setup data for use with the Animal Tracking Toolbox
+ATTdata.SBI<- setupData(Tag.Detections = v.data,
+                      Tag.Metadata = sbi.taginfo, 
+                      Station.Information = SBI.statinfo, 
+                      source="VEMCO")
+
+
+ATTdets.SBI<-as.data.frame(ATTdata.SBI$Tag.Detections)
+ATTmeta.SBI<-as.data.frame(ATTdata.SBI$Tag.Metadata)
+```
+
+### Make abacus plots of raw detections ###
+```{r}
+abacusPlot(ATTdata.SBI)
+abacusPlot(ATTdata.SBI, facet=T, new.window = T)
+```
+
+```{r}
+## Calculate detection metrics
+detSum.SBI<- detectionSummary(ATTdata.SBI)
+
+detSum.SBI_Overall<-as.data.frame(detSum.SBI$Overall)
+
+detSum.SBI_Subsetted<-as.data.frame(detSum.SBI$Subsetted)
+```
+
+
+##Core Areas of Activity
+
+This chunk develops hourly Core Areas of Activity for each fish. It's very process heavy and takes awhile to think. It took a whole 12 hour day for 2 years of data
+
+```{r}
+## Estimate Short-term Center of Activities for all individuals
+
+COAdata<-ATT::COA(ATTdata.SBI, 
+             timestep = 60, ## timestep bin used to estimate centers of activity (in minutes)
+              split = TRUE)
+
+COAdata
+
+## Define coordinate system for projection of detection data (in m)
+proj <- CRS("+init=epsg:3857")
+
+## Estimate 20%, 50% and 95% BBKUD contour areas and store polygons
+BBkud_est.SBI <- HRSummary(COAdata, 
+                         projCRS=proj, 
+                         type="BBKUD", 
+                         cont=c(50,95), 
+                         storepoly=TRUE, h = 200,
+                         ext = 5, grid = 1000, div = 2)
+
+
+## Select rasters of full KUDs for each individual into a single list
+fullstack.SBI <-
+  unlist(BBkud_est.SBI$Spatial.Objects)[grep("*_full", names(unlist(BBkud_est.SBI$Spatial.Objects)))]
+
+names(fullstack.SBI) <-
+  unlist(lapply(strsplit(names(fullstack.SBI), "[.]"), `[[`, 1))
+
+
+```
+
+Plot the Data in the Leaflet package for all KUDs together. Leaflet allows for a google map like exploration of the KUDs
+
+```{r}
+
+library(leaflet)
+
+## Full KUD for all tagged animals
+fullmap <- leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery)
+
+for (i in 1:length(fullstack.SBI)) {
+  tempras<-disaggregate(fullstack.SBI[[i]], fact=3, method='bilinear')
+  values(tempras)[values(tempras) >95] <-NA
+  fullmap <- 
+    fullmap %>% 
+    addRasterImage(tempras, opacity = 0.8, group = names(fullstack.SBI)[i])
+}
+
+coa.detections<-
+  do.call(rbind, COAdata) 
+
+t.coa.detections <- as.data.frame(t(coa.detections)) #name change here incase code 
+
+fullmap <- 
+  fullmap %>%
+  addCircleMarkers(lng = coa.detections$Longitude.coa, lat = coa.detections$Latitude.coa,
+                   color = "red", radius = 1, weight=1, group = coa.detections$Tag.ID) %>%
+  addCircleMarkers(lng = statinfo$station_longitude, lat = statinfo$station_latitude,
+                   fill = F, color = "white", radius = 4, weight = 2, group = "Receiver Stations") %>%
+  addMeasure(position = "bottomleft",
+             primaryLengthUnit = "meters",
+             primaryAreaUnit = "sqmeters") %>%
+  addLayersControl(
+    baseGroups = coa.detections$Tag.ID,
+    overlayGroups = "Receiver Stations",
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+fullmap
+```
+
+Select rasters of subsetted KUDs for each individual into a single list
+
+```{r}
+substack <-
+  unlist(BBkud_est.SBI$Spatial.Objects)[grep("*_sub", names(unlist(BBkud_est.SBI$Spatial.Objects)))]
+```
+
+This code singles out a particular tag but requires the user to change the tag codepace according to your dataset. Need to debug
+```{r}
+tag_subset <-
+  disaggregate(substack$`9718.BBKUD_sub`,
+               fact = 3,
+               method = 'bilinear')
+
+values(tag_subset)[values(tag_subset) > 96] <- NA
+names(tag_subset) <- 
+  format(ymd(paste0(substring(
+    names(tag_subset), 2
+  ), ".01")), "%B %Y")
+
+tag.det<-
+  coa.detections %>%
+  mutate(sub = format(TimeStep.coa, "%B.%Y"))
+
+coa.datr<-
+  ungroup(tag.det) %>%
+  dplyr::select(Longitude.coa,Latitude.coa,sub) %>%
+  split(.$sub)
+
+
+submap<- 
+  leaflet() %>%
+  addProviderTiles(providers$Esri.WorldImagery)
+
+for (i in 1:length(names(tag_subset))) {
+  submap <- 
+    submap %>% 
+    addRasterImage(tag_subset[[i]], opacity = 0.5, group = gsub("[.]", " ", names(tag_subset)[i]))
+} 
+
+submap<- 
+  submap %>%
+  addCircleMarkers(lng = tag.det$Longitude.coa, lat = tag.det$Latitude.coa,
+                   color = "red", radius = 1, weight=1, group = gsub("[.]", " ", tag.det$sub)) %>%
+  addCircleMarkers(lng = sites$Lat_dd, lat = sites$Lon_dd,
+                   fill = F, color = "white", radius = 4, weight=2, group = "Station Name") %>%
+  addLayersControl(
+    baseGroups = gsub("[.]", " ", names(tag_subset)),
+    overlayGroups = "Receiver Stations",
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+submap
+```
+
+##VTrack Animation!: Multitag beep plot
+```{r}
+v.data.like.crocs<-v.data %>% transmute(
+  Date.Time = Date.and.Time..UTC.,
+  Code.Space = substring(Transmitter, 1, 8),
+  ID = substring(Transmitter, 10), 
+  Sensor.1 = NA,
+  Units.1 = NA,
+  Sensor.2 = NA,
+  Units.2= NA,
+  Transmitter.Name = substring(Transmitter, 10),
+  Transmitter.S.N = substring(Transmitter, 10),
+  Receiver.Name = Receiver,
+  Receiver.S.N. = substring(Receiver, 6),
+  Station.Name = Station.Name,
+  STATIONNAME = Station.Name,
+  Station.Latitude = Latitude,
+  Station.Longitude = Longitude,
+)
+
+SBI.distance.like.crocs<-SBI.distance %>% transmute(
+  STATIONNAME = LOCATION,
+  LATITUDE = LATITUDE,
+  LONGITUDE = LONGITUDE,
+  RADIUS = RADIUS)
+
+SBI.distance.like.crocs$STATIONNAME<-as.character(SBI.distance.like.crocs$STATIONNAME)
+
+v.bass<-ReadInputData(infile=v.data.like.crocs,
+                            iHoursToAdd=10,
+                            dateformat = NULL,
+                            sVemcoFormat='1.0')
+
+GenerateAnimationKMLFile_Multitag(v.bass,
+                                      SBI.distance,
+                                      "Bass Moves.kml",
+                                      sLocation= "STATIONNAME")
+
+
+```
+
+##Vtrack Animation of Track Lines
+
+In the second file, you have to change the transmitter ID to be able to create different tracks for each fish
+```{r}
+TransmitterList <- unique(sbi.taginfo$tag_id) # Extract the transmitter names
+
+
+
+GenerateAnimationKMLFile_Track(v.bass, # VTrack archive file
+                               TransmitterList[2], # Transmitter id Change this number to generate new tag track
+                               SBI.distance, # points file
+                               "Track1.kml", # file name
+                               "669900", # colour of the track
+                               sLocation="STATIONNAME")
+```
+
+#Social Networks
+
+This code is adapted from a work flow developed by Alyssa Clevenstine for her GSB research off Catalina. Because GSB are aggregate spawners, Betweenness and Closeness Centrality could be indicative of spawning aggregations.
+
+```{r}
+
+#create data.frame with necessary data
+GSB.net<-v.data %>% transmute(
+  Date_Time_PST = local,
+  Date_Time_PST_Rounded = as.POSIXct(paste(substring(local, 1,13), "00:00", sep = ":")),
+  Site = Station.Name,
+  Transmitter = Transmitter,
+  ID = substring(Transmitter, 10))
+
+#subset summer dates
+summer.19.GSB<-GSB.net[which(GSB.net$Date_Time_PST_Rounded > "2019-06-01 00:00:00"),]
+
+#create week number
+summer.19.GSB2<-summer.19.GSB %>% mutate(week = (year(Date_Time_PST_Rounded) - year(min(Date_Time_PST_Rounded)))*52 + week(Date_Time_PST_Rounded) - week(min(Date_Time_PST_Rounded)), week2 = (as.numeric(Date_Time_PST_Rounded) %/% 7) - (as.numeric(min(Date_Time_PST_Rounded)) %/% 7)) %>%
+  arrange(Date_Time_PST_Rounded)
+
+#change ID to a factor
+tagIDs<-as.factor(sbi.taginfo$tag_id)
+
+# create Julian Time Stamp since 1970
+summer.19.GSB2$Date_Time_PST_Julian<-as.POSIXct(summer.19.GSB2$Date_Time_PST_Rounded, tz = "America/Los Angeles", orgin = "1970-01-01")
+
+summer.19.GSB2$TimeStamp<-as.numeric(unclass(summer.19.GSB2$Date_Time_PST_Julian))
+
+All.Summer.Network <- asnipe::gmmevents(time = summer.19.GSB2$TimeStamp, identity = summer.19.GSB2$ID, location = summer.19.GSB2$Site, global_ids = tagIDs, verbose = TRUE, splitGroups = TRUE)
+
+summer.gbi <- All.Summer.Network$gbi
+summer.events <- All.Summer.Network$metadata
+summer.obs.per.event <- All.Summer.Network$B
+
+sum.network <- get_network(summer.gbi, data_format = "GBI", association_index = "SRI") #calculate a network from
+#a group by individual matrix and set the assoc. index to "simple ratio index"
+
+net <- graph.adjacency(sum.network, mode = "undirected", diag = FALSE, weighted = TRUE)
+#turn it into an igraph
+
+dg.wtd <- graph.strength(net) #calculate the degree of the network
+
+dg.wtd <- graph.strength(net) #calculate the degree of the network
+
+btwn <- igraph::betweenness(net, v = V(net), directed = FALSE, weights = NULL, nobigint = TRUE, normalized = FALSE)
+closeness.cent <- igraph::closeness(net, mode="all")
+dg.cent <- centr_degree(net, mode = "all")
+
+
+V(net)$size <- igraph::degree(net, v = V(net))
+E(net)$width <- E(net)$weight
+
+plot(net, vertex.size = igraph::degree(net, v = V(net))*.5,
+     vertex.label.cex = 1.5, vertex.label.dist = 1, vertex.label.color = "black",
+     vertex.color = "orange", edge.width = E(net)$weight, edge.arrow.size = 0.1, edge.curved = 0.1)
+title(main = "Whole Summer", cex.main = 2)
+
+
+summer.gbi <- as.data.frame(All.Summer.Network$gbi)
+summer.events <- as.data.frame(All.Summer.Network$metadata)
+summer.obs.per.event <- as.data.frame(All.Summer.Network$B)
+
+```
+
+Here is the while loop to run the network by week
+```{r}
+datalist = list()
+for (i in levels(summer.19.GSB2$week < 21)) {
+x<-count(summer.19.GSB2$ID)
+x$i<-i
+datalist[[i]]<-x
+}
+
+```
+
+
+##Residency Metric Creation
+```{r}
+b.res <- RunResidenceExtraction(v.bass, "STATIONNAME", iResidenceThreshold = 3, iTimeThreshold = 60, sDistanceMatrix = DirectDM)
+
+```
+
+
+
+
+## Map raw detection patterns
+
+```{r}
+ATTdata$Tag.Detections %>% 
+  group_by(Transmitter, Station.Name, Longitude, Latitude) %>% 
+  summarise(num.det=n()) %>% 
+  st_as_sf(coords=c("Longitude","Latitude"), crs=4326) %>% 
+  mapview(zcol = "Transmitter", burst=T, legend=F, cex = "num.det") +
+  ATTdata$Station.Information %>% 
+  st_as_sf(coords=c("Station.Longitude", "Station.Latitude"), crs=4326) %>% 
+  mapview(alpha.regions = 0, color = "white", homebutton=F, legend = F, layer.name = "Receivers")
+```
+
+
+
+
+
+
+
+
+
+
+
