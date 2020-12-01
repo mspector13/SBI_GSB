@@ -60,7 +60,7 @@ library(extrafont)
 ```{r}
 
 #Cleaned Up Detection File (Station Names made to match)
-detect <- read_csv("GSB_detections_25Oct2019_Clean.csv")
+detect <- read_csv("VUE_Export_GSB_ALL.csv")
 detect <- detect %>% dplyr::select(`Date and Time (UTC)`,Transmitter, Receiver,           `Station Name`)  #drop not needed cols
 head(detect)  
 
@@ -105,7 +105,7 @@ SBI.GSB$`Date and Time (UTC)`<-as.POSIXct(SBI.GSB$`Date and Time (UTC)`, tz = "U
 
 Breakdown of Detections by Fish
 ```{r}
-#Get Number of Detections by Transimitter
+#Get Number of Detections by Transmitter
 
 trans_counts <-SBI.GSB %>%
   dplyr::select (-c(`Date and Time (UTC)`)) %>%
@@ -187,6 +187,10 @@ filt.det <- proc.det %>%
   singleton_filter(time_horizon = "1 week") #singleton filter
 ```
 
+Save "fit.det" as a CSV in the SB_GSB working directory
+```{r}
+write.csv(filt.det, "filter_dections_all.csv")
+```
 
 ```{r}
 plot_sta_history(proc_det = filt.det) #dections by station
