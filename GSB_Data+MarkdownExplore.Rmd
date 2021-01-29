@@ -187,7 +187,7 @@ filt.det <- proc.det %>%
   singleton_filter(time_horizon = "1 week") #singleton filter
 ```
 
-Save "fit.det" as a CSV in the SB_GSB working directory
+Save "fit.det" as a CSV in the SBI_GSB working directory
 ```{r}
 write.csv(filt.det, "filter_dections_all.csv")
 ```
