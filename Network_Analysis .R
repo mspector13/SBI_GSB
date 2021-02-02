@@ -16,7 +16,10 @@ dates <- GSB_data %>%
 
 head(dates)
 
+#Kris's base R to get POSIXct: > as.POSIXct(GSB_data$dt, format = "%Y-%m-%d %H:%M:%S")
+# as.POSIXct(GSB_data$dt, format = "%Y-%m-%d %H:%M:%S"), "%H") to bin by hour
 
+view(GSB_data)
 #Make a new tibble with only the selected transmitters 
 trans_ID <- dates %>% 
  select(Date, Time, rec_id, id, sta_id) %>%
