@@ -1,5 +1,6 @@
 library(tidyverse)
 library(CMRnet)
+library(lubridate)
 #Load data as a tibble... won't work as a df for some reason.... 
 
 # If not first time, skip ####
@@ -35,6 +36,19 @@ write.csv(IntrData, file = "Trans_ID.csv") #save to repo and edit in Excel lmao
 
 #Load the data ####
 Trans_ID <- read_csv("Trans_ID.csv", na="NULL")
+
+#Our data had a date issue, try:
+#First, mutate dates into characters from vectors
+Trans_ID %>% 
+  mutate(date = as.character(date)) %>% 
+  mutate(loc = as.factor(loc))
+#Then use lubridate to get the character string into the correct format 
+Trans_ID$date <- mdy_hm(Trans_ID$date) #note: syntax is for original format *not* desired
+
+Trans_ID %>% 
+  mutate(x = as.double(x)) %>% 
+  mutate(y = as.double(y))
+
 #Construct co-capture networks ####
 mindate <- "2018/08/13"
 maxdate <- "2019/10/17"
@@ -53,8 +67,3 @@ islanddat <- DynamicNetCreate(
   overlap = overlap,
   spacewindow = spacewindow,
   index=FALSE)
-#Error in h(simpleError(msg, call)) : 
-#error in evaluating the argument 'x' in selecting a method for function 'julian': 
-#character string is not in a standard unambiguous format
-#I think the issue is the date format in Trans_ID$date 
-#But POSIXct and lubridates' magic won't work... 
