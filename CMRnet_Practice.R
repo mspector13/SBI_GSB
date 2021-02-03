@@ -5,6 +5,8 @@
 remotes::install_github("matthewsilk/CMRnet") #(build_vignettes = TRUE) if desired
 
 library(CMRnet)
+#Because the vignettes won't load
+#https://matthewsilk.github.io/CMRnet/articles/CMRnet.html
 
 #For this example we're going to use CMRnet's packaged data: 
 data(cmrData)

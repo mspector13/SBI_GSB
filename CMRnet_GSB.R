@@ -53,4 +53,8 @@ islanddat <- DynamicNetCreate(
   overlap = overlap,
   spacewindow = spacewindow,
   index=FALSE)
-
+#Error in h(simpleError(msg, call)) : 
+#error in evaluating the argument 'x' in selecting a method for function 'julian': 
+#character string is not in a standard unambiguous format
+#I think the issue is the date format in Trans_ID$date 
+#But POSIXct and lubridates' magic won't work... 
