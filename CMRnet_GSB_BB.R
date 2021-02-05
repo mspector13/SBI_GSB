@@ -13,7 +13,7 @@ locs_run_csv <- here("data/locs_run.csv")
 net_dttm_rds <- here("data/net_dttm.rds")
 net_day_rds  <- here("data/net_day.rds")
 
-redo_run_csv = T
+redo_run_csv = F
 
 # read and wrangle ----
 if (!file.exists(locs_run_csv) | redo_run_csv){
@@ -73,12 +73,12 @@ d_locs_run <- read_csv(locs_run_csv, na="NULL") %>%
 mindate     <- min(date(d_locs_run$date)) %>% as.character() # "2018-08-13"
 maxdate     <- max(date(d_locs_run$date)) %>% as.character() # "2019-10-17"
 intwindow   <- 3 # length of time (in days) w/in which individuals are considered co-captured
-netwindow   <- 3 # length of each network window in months
-overlap     <- 1 # overlap between network windows in months
+netwindow   <- 4 # length of each network window in months
+overlap     <- 2 # overlap between network windows in months
 spacewindow <- 0 # spatial tolerance for defining co-captures
 
 # debug
-# source("CMRnet_debug/DynamicNetCreate.R")
+source("CMRnet_debug/DynamicNetCreate.R")
 net_day <- DynamicNetCreate(
   data        = d_locs_run,
   intwindow   = intwindow,
@@ -91,8 +91,16 @@ net_day <- DynamicNetCreate(
 
 write_rds(net_day, net_day_rds)
 
+net_windows <- tibble(
+  starts = c("2018-08-13", "2018-10-13", "2018-12-13", "2019-02-13", "2019-04-13", "2019-06-13"),
+  ends   = c("2018-12-13", "2019-02-13", "2019-04-13", "2019-06-13", "2019-08-13", "2019-10-13")) %>% 
+  mutate(
+    `Network Window` = 1:length(starts))
+net_windows
+
 source("CMRnet_debug/cmr_igraph.R")
 net_social <- cmr_igraph(net_day, type="social")
+
 cmrSocPlot(nets=net_social) # , fixed_locs=T, dynamic=F, rows=4, vertex.label=NA)
 
 # devtools::session_info() # on Ben's laptop

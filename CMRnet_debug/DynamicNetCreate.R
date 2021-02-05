@@ -68,6 +68,10 @@ DynamicNetCreate<-function(data,intwindow,mindate,maxdate,netwindow,overlap,spac
   starts<-month_seq[seq(1,length(month_seq)-L,L-O)]
   ends<-month_seq[which(month_seq%in%starts)+(L)]
   
+  browser()
+  message(glue("starts = c(\"{paste(starts, collapse = '\", \"')}\")"))
+  message(glue("ends   = c(\"{paste(ends  , collapse = '\", \"')}\")"))
+  
   starts<-timeDate::julian(as.Date(starts),origin=as.Date("1970-01-01"))
   ends<-timeDate::julian(as.Date(ends),origin=as.Date("1970-01-01"))
   
