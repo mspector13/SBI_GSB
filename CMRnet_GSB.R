@@ -37,6 +37,11 @@ write.csv(IntrData, file = "Trans_ID.csv") #save to repo and edit in Excel lmao
 #Load the data ####
 Trans_ID <- read_csv("Trans_ID.csv", na="NULL")
 
+Trans_ID <- Trans_ID %>% 
+  select(id, loc, x1, y1, date)
+Trans_ID <- Trans_ID %>% 
+  rename(x=x1) %>% 
+  rename(y=y1)
 #Our data had a date issue, try:
 #First, mutate dates into characters from vectors
 Trans_ID %>% 
@@ -50,8 +55,8 @@ Trans_ID %>%
   mutate(y = as.double(y))
 
 #Construct co-capture networks ####
-mindate <- "2018/08/13"
-maxdate <- "2019/10/17"
+mindate <- "2018-08-13"
+maxdate <- "2019-10-17"
 intwindow <- 1 #length of time (in days) w/in which individuals are considered co-captured
 netwindow <- 12 #length of each network window in months
 overlap <- 0 #overlap between network windows in months
