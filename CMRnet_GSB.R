@@ -32,27 +32,27 @@ IntrData <- GSB_data %>%
 
 #There's going to be a problem with the "loc" column (as.character = true)
 #We need to rename all of the characters in that column with numers (ugh)
-write.csv(IntrData, file = "Trans_ID.csv") #save to repo and edit in Excel lmao
+write_csv(IntrData, file = "Trans_ID.csv") #save to repo and edit in Excel lmao
 
 #Load the data ####
 Trans_ID <- read_csv("Trans_ID.csv", na="NULL")
 
+#From the "coordmeters.R" script to translate lat/longs into a grid 
 Trans_ID <- Trans_ID %>% 
   select(id, loc, x1, y1, date)
 Trans_ID <- Trans_ID %>% 
   rename(x=x1) %>% 
   rename(y=y1)
-#Our data had a date issue, try:
-#First, mutate dates into characters from vectors
-Trans_ID %>% 
-  mutate(date = as.character(date)) %>% 
-  mutate(loc = as.factor(loc))
+
 #Then use lubridate to get the character string into the correct format 
 Trans_ID$date <- mdy_hm(Trans_ID$date) #note: syntax is for original format *not* desired
 
-Trans_ID %>% 
-  mutate(x = as.double(x)) %>% 
-  mutate(y = as.double(y))
+New_data <- Trans_ID %>% 
+  mutate(id = as.integer(id)) %>% 
+  mutate(loc = as.factor(loc)) %>% 
+  mutate(x = as.integer(x)) %>% 
+  mutate(y = as.integer(y))
+New_data
 
 #Construct co-capture networks ####
 mindate <- "2018-08-13"
@@ -64,11 +64,11 @@ spacewindow <- 0 #spatial tolerance for defining co-captures
 
 #create co-capture (social) networks:
 islanddat <- DynamicNetCreate(
-  data = Trans_ID,
-  intwindow = intwindow,
-  mindate = mindate,
-  maxdate = maxdate,
-  netwindow = netwindow,
-  overlap = overlap,
+  data        = New_data,
+  intwindow   = intwindow,
+  mindate     = mindate,
+  maxdate     = maxdate,
+  netwindow   = netwindow,
+  overlap     = overlap,
   spacewindow = spacewindow,
-  index=FALSE)
+  index       = FALSE)
