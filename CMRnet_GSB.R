@@ -1,7 +1,6 @@
 library(tidyverse)
 library(CMRnet)
 library(lubridate)
-#Load data as a tibble... won't work as a df for some reason.... 
 
 # If not first time, skip ####
 GSB_data <- read_csv("filter_dections_all.csv", na="NULL")
@@ -14,7 +13,7 @@ GSB_data <- GSB_data %>%
 
 #Select the appropriate columns, filter out any id's that aren't our fish
 IntrData <- GSB_data %>% 
-  select(id, loc, x, y, date) %>%
+  dplyr::select(id, loc, x, y, date) %>%
   filter(id %in% c("A69-1602-9719",
                    "A69-1602-9720",
                    "A69-1602-9721", 
@@ -37,15 +36,16 @@ write_csv(IntrData, file = "Trans_ID.csv") #save to repo and edit in Excel lmao
 #Load the data ####
 Trans_ID <- read_csv("Trans_ID.csv", na="NULL")
 
-#From the "coordmeters.R" script to translate lat/longs into a grid 
+#From the "coordmeters.R" script to translate lat/longs into a grid
+#LOAD AND RUN "coordmeters.R" first!
 Trans_ID <- Trans_ID %>% 
-  select(id, loc, x1, y1, date)
+  dplyr::select(id, loc, x1, y1, date)
 Trans_ID <- Trans_ID %>% 
   rename(x=x1) %>% 
   rename(y=y1)
 
 #Then use lubridate to get the character string into the correct format 
-Trans_ID$date <- mdy_hm(Trans_ID$date) #note: syntax is for original format *not* desired
+Trans_ID$date <- mdy_hms(Trans_ID$date) #note: syntax is for original format *not* desired
 
 New_data <- Trans_ID %>% 
   mutate(id = as.integer(id)) %>% 
