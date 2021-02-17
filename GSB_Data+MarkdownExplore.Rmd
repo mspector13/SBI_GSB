@@ -60,7 +60,7 @@ library(extrafont)
 ```{r}
 
 #Cleaned Up Detection File (Station Names made to match)
-detect <- read_csv("VUE_Export_GSB_ALL.csv")
+detect <- read_csv("VUE_Export.csv")
 detect <- detect %>% dplyr::select(`Date and Time (UTC)`,Transmitter, Receiver,           `Station Name`)  #drop not needed cols
 head(detect)  
 
@@ -151,7 +151,7 @@ ball
 ```
 
 
-Data Processing Work With ADePTR
+Data Processing Work With ADePTR ###THIS IS WHERE PIKE IS STUCK
 ```{r}
 #### Data Drop in
 
