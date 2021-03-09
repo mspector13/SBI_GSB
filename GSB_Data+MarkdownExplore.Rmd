@@ -34,7 +34,7 @@ library(gganimate)
 library(VTrack)
 library(forecast)
 library(ggthemes)
-library(ATT)
+#library(ATT) #there is no package called 'ATT'
 library(VTrack)
 library(mapview)
 library(rgdal)
@@ -42,7 +42,7 @@ library(raster)
 library(viridis) ## ac
 library(reshape) # this is for colsplit
 library(fields) # this is for colorramps
-library(AssFunc) # for the abacus plots
+#library(AssFunc) # for the abacus plots, there is no package called 'AssFunc'
 library(leaflet)
 library(dplyr)
 library(ggsn)
@@ -51,8 +51,7 @@ library(gdistance)
 library(asnipe) #for GMM events
 library(sna) #for calculating weighted degrees
 library(igraph) #provides a set of data types and functions for implementation of graph algorithms and
-#fast handling of large graphs, with millions of vertices and edges
-library(extrafont)
+#fast handling of large graphs, with millions of vertices and edgeslibrary(extrafont)
 ```
 
 # Add Needed Data
@@ -93,13 +92,13 @@ ProjectArea<-st_read(dsn = "SBI_Shapefiles", layer = "SBI_square")
 Add in Tagging Data from the Notebook
 
 ```{r}
-# Merge dataset and just get my tags
+# Merge dataset and just get our tags
 
 SBI.dat<-merge(detect, sites, by="Station Name") #Merge detection data with site data
 SBI.GSB <-SBI.dat[SBI.dat$Transmitter %in% my.tags, ] # Subset with NOAA Tagged Fish
 SBI.GSB$`Date and Time (UTC)`<-as.POSIXct(SBI.GSB$`Date and Time (UTC)`, tz = "UTC",
                                           format="%m/%d/%y %H:%M")
-
+view(SBI.GSB)
 ```
 
 
@@ -113,7 +112,8 @@ trans_counts <-SBI.GSB %>%
   count(Transmitter) %>%
   ungroup()
 
-trans_counts
+view(trans_counts)
+#Note: only FIVE transmitter remain, does that mean the other fish don't come back/stick around? 
 ```
 
 
@@ -151,11 +151,14 @@ ball
 ```
 
 
-Data Processing Work With ADePTR ###THIS IS WHERE PIKE IS STUCK
+Data Processing Work With ADePTR ###Make *sure* rec.log is correct
 ```{r}
 #### Data Drop in
 
-rec.log<-read.csv("GSBRecLogtillWinter19.csv")
+#rec.log<-read.csv("GSBRecLogtillWinter19.csv")
+rec.log <- read_xlsx("GSBRecLogtillWinter20.xlsx")
+
+view(rec.log)
 
 #make Station File
 stations<-SBI.dat %>%
@@ -191,6 +194,8 @@ Save "fit.det" as a CSV in the SBI_GSB working directory
 ```{r}
 write.csv(filt.det, "filter_dections_all.csv")
 ```
+
+Continue only for VTrack analysis 
 
 ```{r}
 plot_sta_history(proc_det = filt.det) #dections by station

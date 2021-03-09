@@ -1,4 +1,5 @@
 library(tidyverse)
+library(dplyr)
 library(CMRnet)
 library(lubridate)
 
@@ -55,6 +56,7 @@ New_data <- Trans_ID %>%
   dplyr::mutate(y = as.integer(y))
 
 #This should, ideally, group by unique DAYS (not minutes or seconds w/in days)
+#AND n_detetctions *should* return a new column name w/ numbers of detections
 New_data %>% 
   mutate(date = date(date)) %>% 
   group_by(id, loc, x, y, date) %>% 
@@ -80,3 +82,31 @@ islanddat <- DynamicNetCreate(
   overlap     = overlap,
   spacewindow = spacewindow,
   index       = FALSE)
+
+#Plot social network by 
+i_nets <- CMRnet::cmr_igraph(islanddat, type = "social")
+CMRnet::cmrSocPlot(nets=i_nets,
+                   fixed_locs = TRUE, 
+                   dynamic = TRUE,
+                   rows=4)
+
+#create movement network:
+movedat <- CMRnet::MoveNetCreate(
+  data      = New_data,
+  intwindow = intwindow,
+  mindate   = mindate,
+  maxdate   = maxdate,
+  netwindow = netwindow,
+  overlap   = overlap,
+  nextonly  = TRUE,
+  index     = FALSE)
+
+m_nets<-CMRnet::cmr_igraph(movedat,type="movement")
+CMRnet::cmrMovPlot(nets=m_nets,
+                   fixed_locs=TRUE,
+                   dynamic=TRUE,
+                   rows=1,
+                   edge.arrow.size=0.5)
+
+  
+  
