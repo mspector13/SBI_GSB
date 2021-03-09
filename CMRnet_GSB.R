@@ -72,7 +72,7 @@ netwindow <- 12 #length of each network window in months
 overlap <- 0 #overlap between network windows in months
 spacewindow <- 0 #spatial tolerance for defining co-captures
 
-#create co-capture (social) networks:
+#Create co-capture (social) network:
 islanddat <- DynamicNetCreate(
   data        = New_data,
   intwindow   = intwindow,
@@ -83,14 +83,14 @@ islanddat <- DynamicNetCreate(
   spacewindow = spacewindow,
   index       = FALSE)
 
-#Plot social network by 
+#Plot social network 
 i_nets <- CMRnet::cmr_igraph(islanddat, type = "social")
 CMRnet::cmrSocPlot(nets=i_nets,
                    fixed_locs = TRUE, 
                    dynamic = TRUE,
                    rows=4)
 
-#create movement network:
+#Create movement network:
 movedat <- CMRnet::MoveNetCreate(
   data      = New_data,
   intwindow = intwindow,
@@ -101,6 +101,7 @@ movedat <- CMRnet::MoveNetCreate(
   nextonly  = TRUE,
   index     = FALSE)
 
+#Plot movement network 
 m_nets<-CMRnet::cmr_igraph(movedat,type="movement")
 CMRnet::cmrMovPlot(nets=m_nets,
                    fixed_locs=TRUE,
